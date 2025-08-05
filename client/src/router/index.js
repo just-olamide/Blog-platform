@@ -8,7 +8,7 @@ import RegisterView from '@/views/auth/RegisterView.vue'
 
 // TODO: Create these components later
 // import PostView from '@/views/PostView.vue'
-// import CreatePostView from '@/views/CreatePostView.vue'
+ import CreatePostView from '@/views/CreatePostView.vue'
 // import EditPostView from '@/views/EditPostView.vue'
 // import ProfileView from '@/views/ProfileView.vue'
 // import AdminDashboard from '@/views/admin/AdminDashboard.vue'
@@ -36,6 +36,12 @@ const router = createRouter({
       name: 'register',
       component: RegisterView,
       meta: { requiresGuest: true }
+    },
+    {
+      path: '/create-post',
+      name: 'create-post',
+      component: CreatePostView,
+      meta: { requiresAuth: true }
     }
     // TODO: Uncomment these routes when components are created
     // {
@@ -43,12 +49,6 @@ const router = createRouter({
     //   name: 'post',
     //   component: PostView,
     //   props: true
-    // },
-    // {
-    //   path: '/create-post',
-    //   name: 'create-post',
-    //   component: CreatePostView,
-    //   meta: { requiresAuth: true }
     // },
     // {
     //   path: '/posts/:id/edit',

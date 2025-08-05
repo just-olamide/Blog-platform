@@ -32,7 +32,14 @@ class AuthController extends Controller
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
-        ActivityLog::log('user_registered', $user);
+        // Log activity with explicit user ID since user isn't authenticated yet
+        ActivityLog::create([
+            'user_id' => $user->id,
+            'action' => 'user_registered',
+            'model_type' => get_class($user),
+            'model_id' => $user->id,
+            'data' => [],
+        ]);
 
         return response()->json([
             'message' => 'User registered successfully',

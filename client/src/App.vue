@@ -24,12 +24,11 @@
                 <i class="bi bi-house me-1"></i>Home
               </router-link>
             </li>
-            <!-- TODO: Uncomment when CreatePostView component is created -->
-            <!-- <li class="nav-item" v-if="authStore.isAuthenticated">
+            <li class="nav-item" v-if="authStore.isAuthenticated">
               <router-link to="/create-post" class="nav-link">
                 <i class="bi bi-plus-circle me-1"></i>Create Post
               </router-link>
-            </li> -->
+            </li>
             <!-- TODO: Uncomment when AdminDashboard component is created -->
             <!-- <li class="nav-item" v-if="authStore.isAdmin">
               <router-link to="/admin/dashboard" class="nav-link">
