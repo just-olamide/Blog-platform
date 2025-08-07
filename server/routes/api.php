@@ -57,26 +57,24 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/reposted-posts', [PostInteractionController::class, 'repostedPosts']);
     
     // Admin routes (require admin role)
-    Route::prefix('admin')->group(function () {
+    Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
         
-        // Dashboard and analytics
-        Route::get('/dashboard', [AdminController::class, 'dashboard']);
-        Route::get('/analytics/posts', [AdminController::class, 'postsAnalytics']);
-        Route::get('/analytics/users', [AdminController::class, 'userStatistics']);
+        // Dashboard data
+        Route::get('/stats', [AdminController::class, 'getStats']);
+        Route::get('/recent-posts', [AdminController::class, 'getRecentPosts']);
+        Route::get('/chart-data', [AdminController::class, 'getChartData']);
+        Route::get('/export', [AdminController::class, 'exportData']);
         
-        // Content moderation
-        Route::get('/posts', [AdminController::class, 'posts']);
-        Route::get('/comments', [AdminController::class, 'comments']);
-        Route::delete('/posts/{post}/force', [AdminController::class, 'forceDeletePost']);
-        Route::delete('/comments/{comment}/force', [AdminController::class, 'forceDeleteComment']);
+        // Content management
+        Route::get('/posts', [AdminController::class, 'getAllPosts']);
+        Route::delete('/posts/{id}', [AdminController::class, 'deletePost']);
         
-        // User management
-        Route::get('/users', [AdminController::class, 'users']);
-        Route::put('/users/{user}/role', [AdminController::class, 'updateUserRole']);
-        Route::delete('/users/{user}', [AdminController::class, 'deleteUser']);
+        Route::get('/users', [AdminController::class, 'getAllUsers']);
         
-        // Activity logs
-        Route::get('/activity-logs', [AdminController::class, 'activityLogs']);
+        Route::get('/comments', [AdminController::class, 'getAllComments']);
+        Route::delete('/comments/{id}', [AdminController::class, 'deleteComment']);
+        
+        Route::get('/logs', [AdminController::class, 'getActivityLogs']);
         
     });
     

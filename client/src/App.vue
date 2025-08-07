@@ -24,7 +24,7 @@
                 <i class="bi bi-house me-1"></i>Home
               </router-link>
             </li>
-            <li class="nav-item" v-if="authStore.isAuthenticated">
+            <li class="nav-item" v-if="authStore.isAuthenticated && authStore.user?.role !== 'admin'">
               <router-link to="/create-post" class="nav-link">
                 <i class="bi bi-plus-circle me-1"></i>Create Post
               </router-link>
@@ -63,7 +63,12 @@
                 {{ authStore.userName }}
               </a>
               <ul class="dropdown-menu dropdown-menu-end">
-                <li>
+                <li v-if="authStore.user?.role === 'admin'">
+                  <router-link to="/admin" class="dropdown-item">
+                    <i class="bi bi-speedometer2 me-2"></i>Admin Dashboard
+                  </router-link>
+                </li>
+                <li v-if="!authStore.user?.role || authStore.user.role !== 'admin'">
                   <router-link to="/profile" class="dropdown-item">
                     <i class="bi bi-person me-2"></i>Profile
                   </router-link>

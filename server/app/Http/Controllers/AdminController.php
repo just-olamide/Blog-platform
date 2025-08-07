@@ -10,267 +10,388 @@ use App\Models\Save;
 use App\Models\Repost;
 use App\Models\ActivityLog;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class AdminController extends Controller
 {
-    public function __construct()
+    /**
+     * Get dashboard statistics
+     */
+    public function getStats(): JsonResponse
     {
-        $this->middleware(function ($request, $next) {
-            if (!auth()->user()->isAdmin()) {
-                return response()->json(['message' => 'Admin access required'], 403);
+        try {
+            $currentMonth = Carbon::now()->startOfMonth();
+            
+            $stats = [
+                'totalPosts' => Post::count(),
+                'totalUsers' => User::count(),
+                'totalComments' => Comment::count(),
+                'totalLikes' => Like::count(),
+                'newPostsThisMonth' => Post::where('created_at', '>=', $currentMonth)->count(),
+                'newUsersThisMonth' => User::where('created_at', '>=', $currentMonth)->count(),
+                'newCommentsThisMonth' => Comment::where('created_at', '>=', $currentMonth)->count(),
+                'newLikesThisMonth' => Like::where('created_at', '>=', $currentMonth)->count(),
+            ];
+
+            return response()->json($stats);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to fetch statistics',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get recent posts for dashboard
+     */
+    public function getRecentPosts(): JsonResponse
+    {
+        try {
+            $posts = Post::with('user')
+                ->orderBy('created_at', 'desc')
+                ->take(10)
+                ->get();
+
+            return response()->json([
+                'data' => $posts
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to fetch recent posts',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get chart data for dashboard
+     */
+    public function getChartData(): JsonResponse
+    {
+        try {
+            // Posts over time (last 30 days)
+            $postsOverTime = [];
+            for ($i = 29; $i >= 0; $i--) {
+                $date = Carbon::now()->subDays($i)->format('Y-m-d');
+                $count = Post::whereDate('created_at', $date)->count();
+                $postsOverTime[] = [
+                    'date' => Carbon::now()->subDays($i)->format('M j'),
+                    'count' => $count
+                ];
             }
-            return $next($request);
-        });
-    }
 
-    /**
-     * Get dashboard overview statistics
-     */
-    public function dashboard()
-    {
-        $stats = [
-            'total_users' => User::count(),
-            'total_posts' => Post::count(),
-            'total_comments' => Comment::count(),
-            'total_likes' => Like::count(),
-            'total_saves' => Save::count(),
-            'total_reposts' => Repost::count(),
-            'published_posts' => Post::where('status', 'published')->count(),
-            'draft_posts' => Post::where('status', 'draft')->count(),
-            'admin_users' => User::where('role', 'admin')->count(),
-            'regular_users' => User::where('role', 'user')->count(),
-        ];
+            // User activity data
+            $totalSaves = Save::count();
+            $totalReposts = Repost::count();
 
-        return response()->json($stats);
-    }
+            $chartData = [
+                'postsOverTime' => $postsOverTime,
+                'totalSaves' => $totalSaves,
+                'totalReposts' => $totalReposts
+            ];
 
-    /**
-     * Get posts analytics over time (for line chart)
-     */
-    public function postsAnalytics(Request $request)
-    {
-        $period = $request->get('period', '30'); // days
-        $startDate = Carbon::now()->subDays($period);
-
-        $postsData = Post::select(
-                DB::raw('DATE(created_at) as date'),
-                DB::raw('COUNT(*) as count')
-            )
-            ->where('created_at', '>=', $startDate)
-            ->groupBy('date')
-            ->orderBy('date')
-            ->get();
-
-        $likesData = Like::select(
-                DB::raw('DATE(created_at) as date'),
-                DB::raw('COUNT(*) as count')
-            )
-            ->where('created_at', '>=', $startDate)
-            ->groupBy('date')
-            ->orderBy('date')
-            ->get();
-
-        $commentsData = Comment::select(
-                DB::raw('DATE(created_at) as date'),
-                DB::raw('COUNT(*) as count')
-            )
-            ->where('created_at', '>=', $startDate)
-            ->groupBy('date')
-            ->orderBy('date')
-            ->get();
-
-        return response()->json([
-            'posts' => $postsData,
-            'likes' => $likesData,
-            'comments' => $commentsData,
-        ]);
-    }
-
-    /**
-     * Get user statistics (for pie chart)
-     */
-    public function userStatistics()
-    {
-        $userStats = [
-            'admin' => User::where('role', 'admin')->count(),
-            'user' => User::where('role', 'user')->count(),
-        ];
-
-        $postStats = [
-            'published' => Post::where('status', 'published')->count(),
-            'draft' => Post::where('status', 'draft')->count(),
-        ];
-
-        return response()->json([
-            'user_roles' => $userStats,
-            'post_status' => $postStats,
-        ]);
-    }
-
-    /**
-     * Get all posts for moderation
-     */
-    public function posts(Request $request)
-    {
-        $query = Post::with(['user', 'comments', 'likes', 'saves', 'reposts']);
-
-        // Filter by status
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
+            return response()->json($chartData);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to fetch chart data',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        // Search functionality
-        if ($request->has('search')) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
-                $q->where('title', 'like', "%{$search}%")
-                  ->orWhere('content', 'like', "%{$search}%")
-                  ->orWhereHas('user', function($userQuery) use ($search) {
-                      $userQuery->where('name', 'like', "%{$search}%");
-                  });
-            });
-        }
-
-        $posts = $query->latest()->paginate(15);
-
-        return response()->json($posts);
     }
 
     /**
-     * Get all comments for moderation
+     * Export dashboard data as CSV
      */
-    public function comments(Request $request)
+    public function exportData(): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $query = Comment::with(['user', 'post']);
+        try {
+            $filename = 'dashboard-data-' . date('Y-m-d') . '.csv';
 
-        // Search functionality
-        if ($request->has('search')) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
-                $q->where('content', 'like', "%{$search}%")
-                  ->orWhereHas('user', function($userQuery) use ($search) {
-                      $userQuery->where('name', 'like', "%{$search}%");
-                  });
-            });
+            return response()->streamDownload(function () {
+                $handle = fopen('php://output', 'w');
+                
+                // Add CSV headers
+                fputcsv($handle, ['Type', 'ID', 'Title/Name', 'Author/User', 'Created At', 'Status']);
+
+                // Export posts
+                Post::with('user')->chunk(100, function ($posts) use ($handle) {
+                    foreach ($posts as $post) {
+                        fputcsv($handle, [
+                            'Post',
+                            $post->id,
+                            $post->title,
+                            $post->user->name,
+                            $post->created_at->format('Y-m-d H:i:s'),
+                            $post->status
+                        ]);
+                    }
+                });
+
+                // Export users
+                User::chunk(100, function ($users) use ($handle) {
+                    foreach ($users as $user) {
+                        fputcsv($handle, [
+                            'User',
+                            $user->id,
+                            $user->name,
+                            $user->email,
+                            $user->created_at->format('Y-m-d H:i:s'),
+                            $user->role
+                        ]);
+                    }
+                });
+
+                // Export comments
+                Comment::with(['user', 'post'])->chunk(100, function ($comments) use ($handle) {
+                    foreach ($comments as $comment) {
+                        fputcsv($handle, [
+                            'Comment',
+                            $comment->id,
+                            substr($comment->content, 0, 50) . '...',
+                            $comment->user->name,
+                            $comment->created_at->format('Y-m-d H:i:s'),
+                            'Published'
+                        ]);
+                    }
+                });
+
+                fclose($handle);
+            }, $filename, [
+                'Content-Type' => 'text/csv',
+                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to export data',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        $comments = $query->latest()->paginate(20);
-
-        return response()->json($comments);
     }
 
     /**
-     * Get all users for management
+     * Delete post (admin moderation)
      */
-    public function users(Request $request)
+    public function deletePost(Request $request, $id): JsonResponse
     {
-        $query = User::withCount(['posts', 'comments', 'likes']);
+        try {
+            $post = Post::findOrFail($id);
+            
+            // Log the action
+            ActivityLog::create([
+                'user_id' => auth()->id(),
+                'action' => 'admin_delete_post',
+                'description' => "Admin deleted post: {$post->title}",
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
 
-        // Filter by role
-        if ($request->has('role')) {
-            $query->where('role', $request->role);
+            $post->delete();
+
+            return response()->json([
+                'message' => 'Post deleted successfully'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to delete post',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        // Search functionality
-        if ($request->has('search')) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
-            });
-        }
-
-        $users = $query->latest()->paginate(15);
-
-        return response()->json($users);
     }
 
     /**
-     * Update user role
+     * Get all posts for admin management
      */
-    public function updateUserRole(Request $request, User $user)
+    public function getAllPosts(Request $request): JsonResponse
     {
-        $request->validate([
-            'role' => 'required|in:admin,user'
-        ]);
+        try {
+            $query = Post::with(['user', 'comments', 'likes'])
+                ->withCount(['comments', 'likes']);
 
-        $user->update(['role' => $request->role]);
+            // Search functionality
+            if ($request->has('search')) {
+                $search = $request->get('search');
+                $query->where(function ($q) use ($search) {
+                    $q->where('title', 'like', "%{$search}%")
+                      ->orWhere('content', 'like', "%{$search}%")
+                      ->orWhereHas('user', function ($userQuery) use ($search) {
+                          $userQuery->where('name', 'like', "%{$search}%");
+                      });
+                });
+            }
 
-        ActivityLog::log('user_role_updated', $user, [
-            'new_role' => $request->role
-        ]);
+            // Filter by status
+            if ($request->has('status')) {
+                $query->where('status', $request->get('status'));
+            }
 
-        return response()->json([
-            'message' => 'User role updated successfully',
-            'user' => $user
-        ]);
+            // Sorting
+            $sortBy = $request->get('sort_by', 'created_at');
+            $sortOrder = $request->get('sort_order', 'desc');
+            $query->orderBy($sortBy, $sortOrder);
+
+            // Pagination
+            $posts = $query->paginate($request->get('per_page', 15));
+
+            return response()->json($posts);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to fetch posts',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get all users for admin management
+     */
+    public function getAllUsers(Request $request): JsonResponse
+    {
+        try {
+            $query = User::withCount(['posts', 'comments']);
+
+            // Search functionality
+            if ($request->has('search')) {
+                $search = $request->get('search');
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                      ->orWhere('email', 'like', "%{$search}%");
+                });
+            }
+
+            // Filter by role
+            if ($request->has('role')) {
+                $query->where('role', $request->get('role'));
+            }
+
+            // Sorting
+            $sortBy = $request->get('sort_by', 'created_at');
+            $sortOrder = $request->get('sort_order', 'desc');
+            $query->orderBy($sortBy, $sortOrder);
+
+            // Pagination
+            $users = $query->paginate($request->get('per_page', 15));
+
+            return response()->json($users);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to fetch users',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get all comments for admin management
+     */
+    public function getAllComments(Request $request): JsonResponse
+    {
+        try {
+            $query = Comment::with(['user', 'post']);
+
+            // Search functionality
+            if ($request->has('search')) {
+                $search = $request->get('search');
+                $query->where(function ($q) use ($search) {
+                    $q->where('content', 'like', "%{$search}%")
+                      ->orWhereHas('user', function ($userQuery) use ($search) {
+                          $userQuery->where('name', 'like', "%{$search}%");
+                      })
+                      ->orWhereHas('post', function ($postQuery) use ($search) {
+                          $postQuery->where('title', 'like', "%{$search}%");
+                      });
+                });
+            }
+
+            // Sorting
+            $sortBy = $request->get('sort_by', 'created_at');
+            $sortOrder = $request->get('sort_order', 'desc');
+            $query->orderBy($sortBy, $sortOrder);
+
+            // Pagination
+            $comments = $query->paginate($request->get('per_page', 15));
+
+            return response()->json($comments);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to fetch comments',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Delete comment (admin moderation)
+     */
+    public function deleteComment(Request $request, $id): JsonResponse
+    {
+        try {
+            $comment = Comment::findOrFail($id);
+            
+            // Log the action
+            ActivityLog::create([
+                'user_id' => auth()->id(),
+                'action' => 'admin_delete_comment',
+                'description' => "Admin deleted comment by {$comment->user->name}",
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            $comment->delete();
+
+            return response()->json([
+                'message' => 'Comment deleted successfully'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to delete comment',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
      * Get activity logs
      */
-    public function activityLogs(Request $request)
+    public function getActivityLogs(Request $request): JsonResponse
     {
-        $query = ActivityLog::with('user')->latest();
+        try {
+            $query = ActivityLog::with('user');
 
-        // Filter by action
-        if ($request->has('action')) {
-            $query->where('action', $request->action);
-        }
+            // Filter by action
+            if ($request->has('action')) {
+                $query->where('action', $request->get('action'));
+            }
 
-        // Filter by date range
-        if ($request->has('from_date')) {
-            $query->whereDate('created_at', '>=', $request->from_date);
-        }
+            // Filter by user
+            if ($request->has('user_id')) {
+                $query->where('user_id', $request->get('user_id'));
+            }
 
-        if ($request->has('to_date')) {
-            $query->whereDate('created_at', '<=', $request->to_date);
-        }
+            // Date range filter
+            if ($request->has('from_date')) {
+                $query->whereDate('created_at', '>=', $request->get('from_date'));
+            }
+            if ($request->has('to_date')) {
+                $query->whereDate('created_at', '<=', $request->get('to_date'));
+            }
 
-        $logs = $query->paginate(25);
+            // Sorting
+            $sortBy = $request->get('sort_by', 'created_at');
+            $sortOrder = $request->get('sort_order', 'desc');
+            $query->orderBy($sortBy, $sortOrder);
 
-        return response()->json($logs);
-    }
+            // Pagination
+            $logs = $query->paginate($request->get('per_page', 20));
 
-    /**
-     * Delete user (admin only)
-     */
-    public function deleteUser(User $user)
-    {
-        // Prevent deleting the last admin
-        if ($user->isAdmin() && User::where('role', 'admin')->count() <= 1) {
+            return response()->json($logs);
+        } catch (\Exception $e) {
             return response()->json([
-                'message' => 'Cannot delete the last admin user'
-            ], 422);
+                'message' => 'Failed to fetch activity logs',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        ActivityLog::log('user_deleted', $user);
-        $user->delete();
-
-        return response()->json(['message' => 'User deleted successfully']);
-    }
-
-    /**
-     * Force delete post (admin only)
-     */
-    public function forceDeletePost(Post $post)
-    {
-        ActivityLog::log('post_force_deleted', $post);
-        $post->delete();
-
-        return response()->json(['message' => 'Post deleted successfully']);
-    }
-
-    /**
-     * Force delete comment (admin only)
-     */
-    public function forceDeleteComment(Comment $comment)
-    {
-        ActivityLog::log('comment_force_deleted', $comment);
-        $comment->delete();
-
-        return response()->json(['message' => 'Comment deleted successfully']);
     }
 }

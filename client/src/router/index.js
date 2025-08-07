@@ -5,13 +5,14 @@ import { useAuthStore } from '@/stores/auth'
 import HomeView from '@/views/HomeView.vue'
 import LoginView from '@/views/auth/LoginView.vue'
 import RegisterView from '@/views/auth/RegisterView.vue'
+import CreatePostView from '@/views/CreatePostView.vue'
+import PostView from '@/views/PostView.vue'
+import EditPostView from '@/views/EditPostView.vue'
+import ProfileView from '@/views/ProfileView.vue'
 
+// Admin components
+import AdminDashboard from '@/views/admin/AdminDashboard.vue'
 // TODO: Create these components later
-// import PostView from '@/views/PostView.vue'
- import CreatePostView from '@/views/CreatePostView.vue'
-// import EditPostView from '@/views/EditPostView.vue'
-// import ProfileView from '@/views/ProfileView.vue'
-// import AdminDashboard from '@/views/admin/AdminDashboard.vue'
 // import AdminPosts from '@/views/admin/AdminPosts.vue'
 // import AdminUsers from '@/views/admin/AdminUsers.vue'
 // import AdminComments from '@/views/admin/AdminComments.vue'
@@ -41,42 +42,41 @@ const router = createRouter({
       path: '/create-post',
       name: 'create-post',
       component: CreatePostView,
+      meta: { requiresAuth: true, adminRestricted: true }
+    },
+    {
+      path: '/posts/:id',
+      name: 'post',
+      component: PostView,
+      props: true
+    },
+    {
+      path: '/posts/:id/edit',
+      name: 'edit-post',
+      component: EditPostView,
+      props: true,
       meta: { requiresAuth: true }
-    }
+    },
+    {
+      path: '/profile/:id?',
+      name: 'profile',
+      component: ProfileView,
+      props: true,
+      meta: { requiresAuth: true, adminRestricted: true }
+    },
+    {
+      path: '/admin',
+      name: 'admin',
+      redirect: '/admin/dashboard',
+      meta: { requiresAuth: true, requiresAdmin: true }
+    },
+    {
+      path: '/admin/dashboard',
+      name: 'admin-dashboard',
+      component: AdminDashboard,
+      meta: { requiresAuth: true, requiresAdmin: true }
+    },
     // TODO: Uncomment these routes when components are created
-    // {
-    //   path: '/posts/:id',
-    //   name: 'post',
-    //   component: PostView,
-    //   props: true
-    // },
-    // {
-    //   path: '/posts/:id/edit',
-    //   name: 'edit-post',
-    //   component: EditPostView,
-    //   props: true,
-    //   meta: { requiresAuth: true }
-    // },
-    // {
-    //   path: '/profile/:id?',
-    //   name: 'profile',
-    //   component: ProfileView,
-    //   props: true,
-    //   meta: { requiresAuth: true }
-    // },
-    // // Admin routes
-    // {
-    //   path: '/admin',
-    //   name: 'admin',
-    //   redirect: '/admin/dashboard',
-    //   meta: { requiresAuth: true, requiresAdmin: true }
-    // },
-    // {
-    //   path: '/admin/dashboard',
-    //   name: 'admin-dashboard',
-    //   component: AdminDashboard,
-    //   meta: { requiresAuth: true, requiresAdmin: true }
-    // },
     // {
     //   path: '/admin/posts',
     //   name: 'admin-posts',
@@ -123,6 +123,12 @@ router.beforeEach((to, from, next) => {
   // Check if route requires admin
   if (to.meta.requiresAdmin && !authStore.isAdmin) {
     next('/')
+    return
+  }
+  
+  // Check if route is restricted for admins
+  if (to.meta.adminRestricted && authStore.user?.role === 'admin') {
+    next('/admin')
     return
   }
   

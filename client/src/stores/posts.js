@@ -159,8 +159,9 @@ export const usePostsStore = defineStore('posts', {
       try {
         const response = await axios.post(`/posts/${postId}/like`)
         
-        // Update post in arrays
+        // Update both like status and count in posts arrays
         this.updatePostInteraction(postId, 'likes_count', response.data.likes_count)
+        this.updatePostInteraction(postId, 'is_liked', response.data.liked)
         
         return response.data
       } catch (error) {
@@ -187,8 +188,9 @@ export const usePostsStore = defineStore('posts', {
       try {
         const response = await axios.post(`/posts/${postId}/repost`)
         
-        // Update post in arrays
+        // Update both repost status and count in posts arrays
         this.updatePostInteraction(postId, 'reposts_count', response.data.reposts_count)
+        this.updatePostInteraction(postId, 'is_reposted', response.data.reposted)
         
         return response.data
       } catch (error) {
@@ -241,6 +243,42 @@ export const usePostsStore = defineStore('posts', {
         throw error
       } finally {
         this.loading = false
+      }
+    },
+
+    async getPost(id) {
+      try {
+        const response = await axios.get(`/posts/${id}`)
+        this.currentPost = response.data.post
+        return response.data.post
+      } catch (error) {
+        this.error = error.response?.data?.message || 'Post not found'
+        throw error
+      }
+    },
+
+    async getPostComments(postId) {
+      try {
+        const response = await axios.get(`/posts/${postId}/comments`)
+        return response.data.data
+      } catch (error) {
+        this.error = error.response?.data?.message || 'Failed to fetch comments'
+        throw error
+      }
+    },
+
+    async toggleLike(postId) {
+      try {
+        const response = await axios.post(`/posts/${postId}/like`)
+        
+        // Update both like status and count in posts arrays
+        this.updatePostInteraction(postId, 'likes_count', response.data.likes_count)
+        this.updatePostInteraction(postId, 'is_liked', response.data.liked)
+        
+        return response.data
+      } catch (error) {
+        this.error = error.response?.data?.message || 'Failed to toggle like'
+        throw error
       }
     },
 
